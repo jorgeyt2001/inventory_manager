@@ -24,7 +24,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -77,12 +77,45 @@ class DatabaseService {
         createdAt TEXT NOT NULL
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE reservations (
+        id TEXT PRIMARY KEY,
+        productName TEXT NOT NULL,
+        description TEXT,
+        color TEXT,
+        talla TEXT,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        customerName TEXT NOT NULL,
+        customerPhone TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'pendiente',
+        createdAt TEXT NOT NULL
+      )
+    ''');
   }
 
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE products ADD COLUMN color TEXT');
       await db.execute('ALTER TABLE products ADD COLUMN talla TEXT');
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS reservations (
+          id TEXT PRIMARY KEY,
+          productName TEXT NOT NULL,
+          description TEXT,
+          color TEXT,
+          talla TEXT,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          customerName TEXT NOT NULL,
+          customerPhone TEXT,
+          notes TEXT,
+          status TEXT NOT NULL DEFAULT 'pendiente',
+          createdAt TEXT NOT NULL
+        )
+      ''');
     }
   }
 
@@ -156,6 +189,34 @@ class DatabaseService {
     final db = await database;
     await db.insert('returns', productReturn.toMap());
     await updateStock(productReturn.productId, productReturn.quantity);
+  }
+
+  Future<Product?> getProductByBarcode(String barcode) async {
+    final db = await database;
+    final result = await db.query('products', where: 'barcode = ?', whereArgs: [barcode]);
+    if (result.isEmpty) return null;
+    return Product.fromMap(result.first);
+  }
+
+  // Reservations
+  Future<List<Map<String, dynamic>>> getAllReservations() async {
+    final db = await database;
+    return await db.query('reservations', orderBy: 'createdAt DESC');
+  }
+
+  Future<void> insertReservation(Map<String, dynamic> reservation) async {
+    final db = await database;
+    await db.insert('reservations', reservation);
+  }
+
+  Future<void> updateReservationStatus(String id, String status) async {
+    final db = await database;
+    await db.update('reservations', {'status': status}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteReservation(String id) async {
+    final db = await database;
+    await db.delete('reservations', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<Map<String, dynamic>> getStats() async {

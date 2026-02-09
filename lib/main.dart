@@ -5,6 +5,7 @@ import 'dart:io';
 import 'providers/product_provider.dart';
 import 'providers/sale_provider.dart';
 import 'providers/return_provider.dart';
+import 'providers/reservation_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'utils/theme.dart';
 
@@ -30,6 +31,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => SaleProvider()),
         ChangeNotifierProvider(create: (_) => ReturnProvider()),
+        ChangeNotifierProvider(create: (_) => ReservationProvider()),
       ],
       child: MaterialApp(
         title: 'Inventory Manager',

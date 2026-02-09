@@ -8,6 +8,7 @@ import '../products/products_screen.dart';
 import '../sales/sales_screen.dart';
 import '../sales/sale_history_screen.dart';
 import '../returns/returns_screen.dart';
+import '../reservations/reservations_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -133,6 +134,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SaleHistoryScreen()))),
         _buildActionCard('Devoluciones', Icons.assignment_return, Colors.orange,
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReturnsScreen()))),
+        _buildActionCard('Reservas', Icons.bookmark, Colors.teal,
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReservationsScreen()))),
       ],
     );
   }
