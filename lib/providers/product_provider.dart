@@ -10,10 +10,12 @@ class ProductProvider with ChangeNotifier {
 
   List<Product> get products {
     if (_searchQuery.isEmpty) return _products;
-    return _products.where((p) => 
+    return _products.where((p) =>
       p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
       p.category.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-      (p.barcode?.contains(_searchQuery) ?? false)
+      (p.barcode?.contains(_searchQuery) ?? false) ||
+      (p.color?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false) ||
+      (p.talla?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)
     ).toList();
   }
 
@@ -50,6 +52,8 @@ class ProductProvider with ChangeNotifier {
     int stock = 0,
     int minStock = 5,
     String? barcode,
+    String? color,
+    String? talla,
   }) async {
     final product = Product(
       id: const Uuid().v4(),
@@ -61,6 +65,8 @@ class ProductProvider with ChangeNotifier {
       stock: stock,
       minStock: minStock,
       barcode: barcode,
+      color: color,
+      talla: talla,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

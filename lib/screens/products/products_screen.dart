@@ -130,6 +130,41 @@ class _ProductsScreenState extends State<ProductsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(product.category),
+            if (product.color != null || product.talla != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(
+                  children: [
+                    if (product.color != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.purple[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.purple[200]!),
+                        ),
+                        child: Text(
+                          product.color!,
+                          style: TextStyle(fontSize: 11, color: Colors.purple[700]),
+                        ),
+                      ),
+                    if (product.talla != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.indigo[200]!),
+                        ),
+                        child: Text(
+                          'Talla ${product.talla!}',
+                          style: TextStyle(fontSize: 11, color: Colors.indigo[700]),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             Row(
               children: [
                 Text(

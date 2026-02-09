@@ -24,6 +24,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   late TextEditingController _stockController;
   late TextEditingController _minStockController;
   late TextEditingController _barcodeController;
+  String? _selectedColor;
+  String? _selectedTalla;
 
   bool get isEditing => widget.product != null;
 
@@ -38,6 +40,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _stockController = TextEditingController(text: widget.product?.stock.toString() ?? '0');
     _minStockController = TextEditingController(text: widget.product?.minStock.toString() ?? '5');
     _barcodeController = TextEditingController(text: widget.product?.barcode ?? '');
+    _selectedColor = widget.product?.color;
+    _selectedTalla = widget.product?.talla;
   }
 
   @override
@@ -104,7 +108,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       labelText: 'Precio *',
                       prefixIcon: Icon(Icons.attach_money),
                     ),
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Requerido';
@@ -124,7 +128,55 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       labelText: 'Costo',
                       prefixIcon: Icon(Icons.money_off),
                     ),
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedColor,
+                    decoration: const InputDecoration(
+                      labelText: 'Color',
+                      prefixIcon: Icon(Icons.palette),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('Sin color'),
+                      ),
+                      ...Product.coloresSelene.map((color) =>
+                        DropdownMenuItem(value: color, child: Text(color)),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _selectedColor = value);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedTalla,
+                    decoration: const InputDecoration(
+                      labelText: 'Talla',
+                      prefixIcon: Icon(Icons.straighten),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('Sin talla'),
+                      ),
+                      ...Product.tallasSelene.map((talla) =>
+                        DropdownMenuItem(value: talla, child: Text(talla)),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _selectedTalla = value);
+                    },
                   ),
                 ),
               ],
@@ -223,6 +275,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         stock: int.tryParse(_stockController.text) ?? 0,
         minStock: int.tryParse(_minStockController.text) ?? 5,
         barcode: _barcodeController.text.isEmpty ? null : _barcodeController.text,
+        color: _selectedColor,
+        talla: _selectedTalla,
       );
       await provider.updateProduct(updated);
     } else {
@@ -235,6 +289,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         stock: int.tryParse(_stockController.text) ?? 0,
         minStock: int.tryParse(_minStockController.text) ?? 5,
         barcode: _barcodeController.text.isEmpty ? null : _barcodeController.text,
+        color: _selectedColor,
+        talla: _selectedTalla,
       );
     }
 

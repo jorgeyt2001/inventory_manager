@@ -24,8 +24,9 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
 
@@ -41,6 +42,8 @@ class DatabaseService {
         stock INTEGER DEFAULT 0,
         minStock INTEGER DEFAULT 5,
         barcode TEXT,
+        color TEXT,
+        talla TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -74,6 +77,13 @@ class DatabaseService {
         createdAt TEXT NOT NULL
       )
     ''');
+  }
+
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE products ADD COLUMN color TEXT');
+      await db.execute('ALTER TABLE products ADD COLUMN talla TEXT');
+    }
   }
 
   Future<List<Product>> getAllProducts() async {

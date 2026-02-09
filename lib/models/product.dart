@@ -8,8 +8,60 @@ class Product {
   final int stock;
   final int minStock;
   final String? barcode;
+  final String? color;
+  final String? talla;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  // Colores predefinidos de Selene
+  static const List<String> coloresSelene = [
+    'Negro',
+    'Blanco',
+    'Rojo',
+    'Azul',
+    'Rosa',
+    'Tierra',
+    'Beige',
+    'Gris',
+    'Verde',
+    'Morado',
+    'Nude',
+    'Cafe',
+    'Vino',
+    'Coral',
+    'Amarillo',
+    'Naranja',
+    'Celeste',
+    'Marino',
+    'Chocolate',
+    'Hueso',
+  ];
+
+  // Tallas predefinidas de Selene
+  static const List<String> tallasSelene = [
+    'XS',
+    'S',
+    'M',
+    'L',
+    'XL',
+    'XXL',
+    '2',
+    '4',
+    '6',
+    '8',
+    '10',
+    '12',
+    '14',
+    '16',
+    '28',
+    '30',
+    '32',
+    '34',
+    '36',
+    '38',
+    '40',
+    'Unitalla',
+  ];
 
   Product({
     required this.id,
@@ -21,6 +73,8 @@ class Product {
     this.stock = 0,
     this.minStock = 5,
     this.barcode,
+    this.color,
+    this.talla,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -36,6 +90,8 @@ class Product {
       'stock': stock,
       'minStock': minStock,
       'barcode': barcode,
+      'color': color,
+      'talla': talla,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -52,6 +108,8 @@ class Product {
       stock: map['stock']?.toInt() ?? 0,
       minStock: map['minStock']?.toInt() ?? 5,
       barcode: map['barcode'],
+      color: map['color'],
+      talla: map['talla'],
       createdAt: DateTime.parse(map['createdAt']),
       updatedAt: DateTime.parse(map['updatedAt']),
     );
@@ -67,6 +125,8 @@ class Product {
     int? stock,
     int? minStock,
     String? barcode,
+    String? color,
+    String? talla,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -80,6 +140,8 @@ class Product {
       stock: stock ?? this.stock,
       minStock: minStock ?? this.minStock,
       barcode: barcode ?? this.barcode,
+      color: color ?? this.color,
+      talla: talla ?? this.talla,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
