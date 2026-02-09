@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 class AppFormatters {
   static final _currencyFormat = NumberFormat.currency(
     locale: 'es_ES',
-    symbol: '\$',
+    symbol: '\u20ac',
     decimalDigits: 2,
   );
 

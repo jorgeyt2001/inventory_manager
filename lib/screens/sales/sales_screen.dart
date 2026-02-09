@@ -224,13 +224,24 @@ class _SalesScreenState extends State<SalesScreen> {
                             Text(
                               product.name,
                               style: const TextStyle(fontWeight: FontWeight.bold),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            if (product.color != null || product.talla != null)
+                              Row(
+                                children: [
+                                  if (product.color != null)
+                                    Text('${product.color!} ',
+                                        style: TextStyle(fontSize: 10, color: Colors.purple[400])),
+                                  if (product.talla != null)
+                                    Text('T.${product.talla!}',
+                                        style: TextStyle(fontSize: 10, color: Colors.indigo[400])),
+                                ],
+                              ),
                             if (product.barcode != null && product.barcode!.isNotEmpty)
                               Text(
                                 product.barcode!,
-                                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
                               ),
                           ],
                         ),
