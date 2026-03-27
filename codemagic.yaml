@@ -1,6 +1,6 @@
 workflows:
   ios-unsigned:
-    name: iOS Build (unsigned)
+    name: iOS IPA sin firma
     max_build_duration: 60
     environment:
       flutter: stable
@@ -9,14 +9,13 @@ workflows:
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
-      - name: Build iOS (no codesign)
-        script: |
-          flutter build ios --release --no-codesign
-      - name: Create IPA
+      - name: Build iOS sin codesign
+        script: flutter build ios --release --no-codesign
+      - name: Crear IPA
         script: |
           cd build/ios/iphoneos
           mkdir -p Payload
           cp -r Runner.app Payload/
-          zip -r inventory_manager.ipa Payload/
+          zip -r ../../inventory_manager.ipa Payload/
     artifacts:
-      - build/ios/iphoneos/inventory_manager.ipa
+      - build/inventory_manager.ipa
