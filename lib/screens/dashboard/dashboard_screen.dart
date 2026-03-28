@@ -3,13 +3,14 @@ import 'package:provider/provider.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/reservation_provider.dart';
-import '../../database/database_service.dart';
+import '../../services/api_service.dart';
 import '../../utils/formatters.dart';
 import '../products/products_screen.dart';
 import '../sales/sales_screen.dart';
 import '../sales/sale_history_screen.dart';
 import '../returns/returns_screen.dart';
 import '../reservations/reservations_screen.dart';
+import '../settings/settings_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -39,7 +40,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await productProvider.loadProducts();
     await saleProvider.loadSales();
     await reservationProvider.loadReservations();
-    _stats = await DatabaseService.instance.getStats();
+
+    try {
+      _stats = await ApiService.getDashboardStats();
+    } catch (e) {
+      debugPrint('Error loading stats: $e');
+      _stats = {
+        'total_products': productProvider.products.length,
+        'low_stock_count': productProvider.lowStockProducts.length,
+        'today_sales': 0.0,
+        'total_sales': 0.0,
+      };
+    }
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -53,6 +65,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('Selene Inventory'),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Ajustes',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
         ],
       ),
       body: _isLoading
@@ -91,10 +111,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       crossAxisSpacing: 10,
       childAspectRatio: 1.6,
       children: [
-        _buildStatCard('Productos', '${_stats['productsCount'] ?? 0}', Icons.inventory_2, Colors.blue),
-        _buildStatCard('Stock Bajo', '${_stats['lowStockCount'] ?? 0}', Icons.warning_amber_rounded, Colors.orange),
-        _buildStatCard('Ventas Hoy', AppFormatters.currency(_stats['todaySales'] ?? 0.0), Icons.today, Colors.green),
-        _buildStatCard('Total Ventas', AppFormatters.currency(_stats['totalSales'] ?? 0.0), Icons.euro, Colors.purple),
+        _buildStatCard('Productos', '${_stats['total_products'] ?? 0}', Icons.inventory_2, Colors.blue),
+        _buildStatCard('Stock Bajo', '${_stats['low_stock_count'] ?? 0}', Icons.warning_amber_rounded, Colors.orange),
+        _buildStatCard('Ventas Hoy', AppFormatters.currency((_stats['today_sales'] as num?)?.toDouble() ?? 0.0), Icons.today, Colors.green),
+        _buildStatCard('Total Ventas', AppFormatters.currency((_stats['total_sales'] as num?)?.toDouble() ?? 0.0), Icons.euro, Colors.purple),
         if (pendingReservations > 0)
           _buildStatCard('Reservas', '$pendingReservations pendientes', Icons.bookmark, Colors.teal),
       ],
@@ -211,19 +231,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   backgroundColor: Colors.orange[200],
                   foregroundColor: Colors.orange[900],
                   radius: 18,
-                  child: Text('${product.stock}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  child: Text('${product.stock}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
                 title: Text(product.name, style: const TextStyle(fontSize: 14)),
                 subtitle: Row(
                   children: [
-                    Text('Min: ${product.minStock}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    Text('Min: ${product.minStock}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                     if (product.color != null) ...[
                       const SizedBox(width: 8),
-                      Text(product.color!, style: TextStyle(fontSize: 11, color: Colors.purple[400])),
+                      Text(product.color!,
+                          style: TextStyle(fontSize: 11, color: Colors.purple[400])),
                     ],
                     if (product.talla != null) ...[
                       const SizedBox(width: 4),
-                      Text('T.${product.talla!}', style: TextStyle(fontSize: 11, color: Colors.indigo[400])),
+                      Text('T.${product.talla!}',
+                          style: TextStyle(fontSize: 11, color: Colors.indigo[400])),
                     ],
                   ],
                 ),

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
+import '../../models/category.dart';
+import '../../models/location.dart';
 import '../../providers/product_provider.dart';
+import '../../providers/category_provider.dart';
+import '../../providers/location_provider.dart';
 import '../../utils/formatters.dart';
 import 'product_form_screen.dart';
 
@@ -19,6 +23,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void initState() {
     super.initState();
     context.read<ProductProvider>().loadProducts();
+    context.read<CategoryProvider>().loadCategories();
+    context.read<LocationProvider>().loadLocations();
   }
 
   @override
@@ -42,7 +48,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
@@ -63,6 +69,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               },
             ),
           ),
+          _buildFilterRow(),
           Expanded(
             child: Consumer<ProductProvider>(
               builder: (context, provider, child) {
@@ -112,6 +119,67 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
+  Widget _buildFilterRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        children: [
+          // Category filter
+          Expanded(
+            child: Consumer<CategoryProvider>(
+              builder: (context, catProvider, _) {
+                final productProvider = context.read<ProductProvider>();
+                return DropdownButtonFormField<int>(
+                  value: productProvider.filterCategoryId,
+                  isDense: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Categoria',
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int>(value: null, child: Text('Todas')),
+                    ...catProvider.categories.map<DropdownMenuItem<int>>((AppCategory cat) =>
+                      DropdownMenuItem<int>(value: cat.id, child: Text(cat.name)),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    context.read<ProductProvider>().setFilterCategory(value);
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Location filter
+          Expanded(
+            child: Consumer<LocationProvider>(
+              builder: (context, locProvider, _) {
+                final productProvider = context.read<ProductProvider>();
+                return DropdownButtonFormField<int>(
+                  value: productProvider.filterLocationId,
+                  isDense: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Ubicacion',
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int>(value: null, child: Text('Todas')),
+                    ...locProvider.locations.map<DropdownMenuItem<int>>((AppLocation loc) =>
+                      DropdownMenuItem<int>(value: loc.id, child: Text(loc.name)),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    context.read<ProductProvider>().setFilterLocation(value);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProductCard(Product product) {
     final isLowStock = product.stock <= product.minStock;
 
@@ -129,7 +197,37 @@ class _ProductsScreenState extends State<ProductsScreen> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(product.category),
+            Row(
+              children: [
+                if (product.category != 'General')
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Text(
+                      product.category,
+                      style: TextStyle(fontSize: 11, color: Colors.blue[700]),
+                    ),
+                  ),
+                if (product.locationName != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.teal[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.teal[200]!),
+                    ),
+                    child: Text(
+                      product.locationName!,
+                      style: TextStyle(fontSize: 11, color: Colors.teal[700]),
+                    ),
+                  ),
+              ],
+            ),
             if (product.color != null || product.talla != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),

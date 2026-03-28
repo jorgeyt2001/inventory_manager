@@ -6,18 +6,24 @@ import 'providers/product_provider.dart';
 import 'providers/sale_provider.dart';
 import 'providers/return_provider.dart';
 import 'providers/reservation_provider.dart';
+import 'providers/category_provider.dart';
+import 'providers/location_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'utils/theme.dart';
+import 'services/barcode_server_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Inicializar SQLite para Windows/Linux
+
+  // Inicializar SQLite para Windows/Linux (para historial de ventas local)
   if (Platform.isWindows || Platform.isLinux) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
-  
+
+  // Iniciar servidor HTTP companion para scanner desde iPhone
+  await BarcodeServerService.instance.start();
+
   runApp(const MyApp());
 }
 
@@ -28,6 +34,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => CategoryProvider()),
+        ChangeNotifierProvider(create: (_) => LocationProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => SaleProvider()),
         ChangeNotifierProvider(create: (_) => ReturnProvider()),

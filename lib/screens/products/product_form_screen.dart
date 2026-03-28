@@ -1,9 +1,15 @@
-import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/product.dart';
+import '../../models/category.dart';
+import '../../models/location.dart';
 import '../../providers/product_provider.dart';
-import '../sales/barcode_scanner_screen.dart';
+import '../../providers/category_provider.dart';
+import '../../providers/location_provider.dart';
+import '../../services/api_service.dart';
+import '../../services/barcode_server_service.dart';
 
 class ProductFormScreen extends StatefulWidget {
   final Product? product;
@@ -18,7 +24,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
-  late TextEditingController _categoryController;
   late TextEditingController _priceController;
   late TextEditingController _costController;
   late TextEditingController _stockController;
@@ -26,6 +31,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   late TextEditingController _barcodeController;
   String? _selectedColor;
   String? _selectedTalla;
+  int? _selectedCategoryId;
+  int? _selectedLocationId;
+  Timer? _barcodeDebounce;
 
   bool get isEditing => widget.product != null;
 
@@ -34,7 +42,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     super.initState();
     _nameController = TextEditingController(text: widget.product?.name ?? '');
     _descriptionController = TextEditingController(text: widget.product?.description ?? '');
-    _categoryController = TextEditingController(text: widget.product?.category ?? 'General');
     _priceController = TextEditingController(text: widget.product?.price.toString() ?? '');
     _costController = TextEditingController(text: widget.product?.cost.toString() ?? '0');
     _stockController = TextEditingController(text: widget.product?.stock.toString() ?? '0');
@@ -42,13 +49,24 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _barcodeController = TextEditingController(text: widget.product?.barcode ?? '');
     _selectedColor = widget.product?.color;
     _selectedTalla = widget.product?.talla;
+    _selectedCategoryId = widget.product?.categoryId;
+    _selectedLocationId = widget.product?.locationId;
+
+    _barcodeController.addListener(_onBarcodeChanged);
+
+    // Load categories and locations if not loaded yet
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CategoryProvider>().loadCategories();
+      context.read<LocationProvider>().loadLocations();
+    });
   }
 
   @override
   void dispose() {
+    _barcodeDebounce?.cancel();
+    _barcodeController.removeListener(_onBarcodeChanged);
     _nameController.dispose();
     _descriptionController.dispose();
-    _categoryController.dispose();
     _priceController.dispose();
     _costController.dispose();
     _stockController.dispose();
@@ -56,6 +74,104 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _barcodeController.dispose();
     super.dispose();
   }
+
+  // ── Auto-fill on barcode change ──────────────────────────────────────────────
+
+  void _onBarcodeChanged() {
+    _barcodeDebounce?.cancel();
+    final barcode = _barcodeController.text.trim();
+    if (barcode.length >= 4) {
+      _barcodeDebounce = Timer(const Duration(milliseconds: 600), () {
+        _autoFillFromBarcode(barcode);
+      });
+    }
+  }
+
+  Future<void> _autoFillFromBarcode(String barcode) async {
+    final data = await ApiService.getProductByBarcode(barcode);
+    if (data != null && mounted) {
+      setState(() {
+        _nameController.text = data['name'] ?? '';
+        _descriptionController.text = data['description'] ?? '';
+        _priceController.text = (data['price'] ?? 0).toString();
+        _costController.text = (data['cost'] ?? 0).toString();
+        _selectedColor = data['color'];
+        _selectedTalla = data['talla'];
+        _selectedCategoryId = data['category_id'];
+        _selectedLocationId = data['location_id'];
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Producto encontrado: ${data['name']}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Not in own API — try external barcode databases
+    final external = await ApiService.lookupExternalBarcode(barcode);
+    if (external != null && mounted) {
+      setState(() {
+        _nameController.text = external['name'] ?? '';
+        if ((external['description'] ?? '').isNotEmpty) {
+          _descriptionController.text = external['description']!;
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Producto encontrado en base de datos externa: ${external['name']}'),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  // ── Web companion scanner ────────────────────────────────────────────────────
+
+  void _scanBarcode() async {
+    final service = BarcodeServerService.instance;
+    final url = service.serverUrl;
+
+    if (url == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Servidor no disponible. Verifica la conexion WiFi.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    String? receivedBarcode;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => _WebScannerDialog(
+        url: url,
+        onBarcodeReceived: (barcode) {
+          receivedBarcode = barcode;
+          Navigator.of(dialogContext).pop();
+        },
+      ),
+    );
+
+    if (receivedBarcode != null && mounted) {
+      _barcodeController.removeListener(_onBarcodeChanged);
+      setState(() => _barcodeController.text = receivedBarcode!);
+      _barcodeController.addListener(_onBarcodeChanged);
+      _autoFillFromBarcode(receivedBarcode!);
+    }
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -75,9 +191,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 prefixIcon: Icon(Icons.inventory_2),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'El nombre es requerido';
-                }
+                if (value == null || value.isEmpty) return 'El nombre es requerido';
                 return null;
               },
             ),
@@ -91,12 +205,44 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               maxLines: 2,
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _categoryController,
-              decoration: const InputDecoration(
-                labelText: 'Categoria',
-                prefixIcon: Icon(Icons.category),
-              ),
+            // ── Category dropdown ──────────────────────────────────────────
+            Consumer<CategoryProvider>(
+              builder: (context, catProvider, _) {
+                return DropdownButtonFormField<int>(
+                  value: _selectedCategoryId,
+                  decoration: const InputDecoration(
+                    labelText: 'Categoria',
+                    prefixIcon: Icon(Icons.category),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int>(value: null, child: Text('Sin categoria')),
+                    ...catProvider.categories.map<DropdownMenuItem<int>>((AppCategory cat) =>
+                      DropdownMenuItem<int>(value: cat.id, child: Text(cat.name)),
+                    ),
+                  ],
+                  onChanged: (value) => setState(() => _selectedCategoryId = value),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            // ── Location dropdown ──────────────────────────────────────────
+            Consumer<LocationProvider>(
+              builder: (context, locProvider, _) {
+                return DropdownButtonFormField<int>(
+                  value: _selectedLocationId,
+                  decoration: const InputDecoration(
+                    labelText: 'Ubicacion',
+                    prefixIcon: Icon(Icons.place),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int>(value: null, child: Text('Sin ubicacion')),
+                    ...locProvider.locations.map<DropdownMenuItem<int>>((AppLocation loc) =>
+                      DropdownMenuItem<int>(value: loc.id, child: Text(loc.name)),
+                    ),
+                  ],
+                  onChanged: (value) => setState(() => _selectedLocationId = value),
+                );
+              },
             ),
             const SizedBox(height: 16),
             Row(
@@ -110,12 +256,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Requerido';
-                      }
-                      if (double.tryParse(value) == null) {
-                        return 'Numero invalido';
-                      }
+                      if (value == null || value.isEmpty) return 'Requerido';
+                      if (double.tryParse(value) == null) return 'Numero invalido';
                       return null;
                     },
                   ),
@@ -138,45 +280,35 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: _selectedColor,
+                    value: _selectedColor,
                     decoration: const InputDecoration(
                       labelText: 'Color',
                       prefixIcon: Icon(Icons.palette),
                     ),
                     items: [
-                      const DropdownMenuItem<String>(
-                        value: null,
-                        child: Text('Sin color'),
-                      ),
+                      const DropdownMenuItem<String>(value: null, child: Text('Sin color')),
                       ...Product.coloresSelene.map((color) =>
                         DropdownMenuItem(value: color, child: Text(color)),
                       ),
                     ],
-                    onChanged: (value) {
-                      setState(() => _selectedColor = value);
-                    },
+                    onChanged: (value) => setState(() => _selectedColor = value),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: _selectedTalla,
+                    value: _selectedTalla,
                     decoration: const InputDecoration(
                       labelText: 'Talla',
                       prefixIcon: Icon(Icons.straighten),
                     ),
                     items: [
-                      const DropdownMenuItem<String>(
-                        value: null,
-                        child: Text('Sin talla'),
-                      ),
+                      const DropdownMenuItem<String>(value: null, child: Text('Sin talla')),
                       ...Product.tallasSelene.map((talla) =>
                         DropdownMenuItem(value: talla, child: Text(talla)),
                       ),
                     ],
-                    onChanged: (value) {
-                      setState(() => _selectedTalla = value);
-                    },
+                    onChanged: (value) => setState(() => _selectedTalla = value),
                   ),
                 ),
               ],
@@ -219,19 +351,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ),
                   ),
                 ),
-                if (Platform.isAndroid || Platform.isIOS)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: IconButton.filled(
-                      onPressed: _scanBarcode,
-                      icon: const Icon(Icons.qr_code_scanner),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(48, 48),
-                      ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: IconButton.filled(
+                    onPressed: _scanBarcode,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    tooltip: 'Escanear con iPhone',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(48, 48),
                     ),
                   ),
+                ),
               ],
             ),
             const SizedBox(height: 32),
@@ -248,18 +380,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
-  void _scanBarcode() async {
-    final barcode = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
-    );
-    if (barcode != null && barcode.isNotEmpty && mounted) {
-      setState(() {
-        _barcodeController.text = barcode.trim();
-      });
-    }
-  }
-
   void _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -269,7 +389,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       final updated = widget.product!.copyWith(
         name: _nameController.text,
         description: _descriptionController.text,
-        category: _categoryController.text,
+        categoryId: _selectedCategoryId,
+        locationId: _selectedLocationId,
         price: double.tryParse(_priceController.text) ?? 0,
         cost: double.tryParse(_costController.text) ?? 0,
         stock: int.tryParse(_stockController.text) ?? 0,
@@ -283,7 +404,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       await provider.addProduct(
         name: _nameController.text,
         description: _descriptionController.text,
-        category: _categoryController.text,
+        categoryId: _selectedCategoryId,
+        locationId: _selectedLocationId,
         price: double.tryParse(_priceController.text) ?? 0,
         cost: double.tryParse(_costController.text) ?? 0,
         stock: int.tryParse(_stockController.text) ?? 0,
@@ -300,5 +422,107 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         SnackBar(content: Text(isEditing ? 'Producto actualizado' : 'Producto creado')),
       );
     }
+  }
+}
+
+// ── Web Scanner Dialog ─────────────────────────────────────────────────────────
+
+class _WebScannerDialog extends StatefulWidget {
+  final String url;
+  final void Function(String barcode) onBarcodeReceived;
+
+  const _WebScannerDialog({required this.url, required this.onBarcodeReceived});
+
+  @override
+  State<_WebScannerDialog> createState() => _WebScannerDialogState();
+}
+
+class _WebScannerDialogState extends State<_WebScannerDialog> {
+  StreamSubscription<String>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = BarcodeServerService.instance.barcodeStream.listen((barcode) {
+      if (mounted) widget.onBarcodeReceived(barcode);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.qr_code_scanner, color: Colors.green),
+          SizedBox(width: 8),
+          Text('Escanear desde iPhone'),
+        ],
+      ),
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Abre esta URL en Safari de tu iPhone:',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              widget.url,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+                fontSize: 15,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: QrImageView(
+                data: widget.url,
+                version: QrVersions.auto,
+                size: 180,
+                backgroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Text(
+                  'Esperando escaneo...',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+      ],
+    );
   }
 }

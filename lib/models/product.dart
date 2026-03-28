@@ -1,8 +1,11 @@
 class Product {
-  final String id;
+  final String id; // API integer id stored as String
   final String name;
   final String description;
-  final String category;
+  final String category; // display name (populated from category_name)
+  final int? categoryId;
+  final int? locationId;
+  final String? locationName;
   final double price;
   final double cost;
   final int stock;
@@ -15,26 +18,38 @@ class Product {
 
   // Colores predefinidos de Selene
   static const List<String> coloresSelene = [
-    'Marfil',
-    'Rose',
-    'Negro',
     'Blanco',
+    'Marfil',
+    'Hueso',
     'Nude',
-    'Tierra',
     'Beige',
-    'Rosa',
-    'Rojo',
-    'Vino',
-    'Coral',
+    'Camel',
+    'Tierra',
     'Cafe',
     'Chocolate',
     'Gris',
+    'Plata',
+    'Negro',
+    'Dorado',
+    'Rose',
+    'Rosa',
+    'Rojo',
+    'Coral',
+    'Salmón',
+    'Fucsia',
+    'Vino',
+    'Burdeos',
+    'Granate',
+    'Mostaza',
+    'Naranja',
+    'Amarillo',
     'Azul',
     'Marino',
     'Celeste',
+    'Turquesa',
     'Verde',
     'Morado',
-    'Hueso',
+    'Lavanda',
   ];
 
   // Tallas predefinidas de Selene
@@ -55,6 +70,9 @@ class Product {
     required this.name,
     this.description = '',
     this.category = 'General',
+    this.categoryId,
+    this.locationId,
+    this.locationName,
     required this.price,
     this.cost = 0,
     this.stock = 0,
@@ -65,6 +83,47 @@ class Product {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  // ── API JSON ────────────────────────────────────────────────────────────────
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id'].toString(),
+      name: json['name'],
+      description: json['description'] ?? '',
+      category: json['category_name'] ?? 'General',
+      categoryId: json['category_id'],
+      locationId: json['location_id'],
+      locationName: json['location_name'],
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      cost: (json['cost'] as num?)?.toDouble() ?? 0.0,
+      stock: (json['stock'] as num?)?.toInt() ?? 0,
+      minStock: (json['min_stock'] as num?)?.toInt() ?? 5,
+      barcode: json['barcode'],
+      color: json['color'],
+      talla: json['talla'],
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'description': description,
+      'category_id': categoryId,
+      'location_id': locationId,
+      'price': price,
+      'cost': cost,
+      'stock': stock,
+      'min_stock': minStock,
+      'barcode': barcode,
+      'color': color,
+      'talla': talla,
+    };
+  }
+
+  // ── Legacy SQLite map (kept for sale history compatibility) ─────────────────
 
   Map<String, dynamic> toMap() {
     return {
@@ -90,10 +149,10 @@ class Product {
       name: map['name'],
       description: map['description'] ?? '',
       category: map['category'] ?? 'General',
-      price: map['price']?.toDouble() ?? 0.0,
-      cost: map['cost']?.toDouble() ?? 0.0,
-      stock: map['stock']?.toInt() ?? 0,
-      minStock: map['minStock']?.toInt() ?? 5,
+      price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      cost: (map['cost'] as num?)?.toDouble() ?? 0.0,
+      stock: (map['stock'] as num?)?.toInt() ?? 0,
+      minStock: (map['minStock'] as num?)?.toInt() ?? 5,
       barcode: map['barcode'],
       color: map['color'],
       talla: map['talla'],
@@ -107,6 +166,9 @@ class Product {
     String? name,
     String? description,
     String? category,
+    int? categoryId,
+    int? locationId,
+    String? locationName,
     double? price,
     double? cost,
     int? stock,
@@ -122,6 +184,9 @@ class Product {
       name: name ?? this.name,
       description: description ?? this.description,
       category: category ?? this.category,
+      categoryId: categoryId ?? this.categoryId,
+      locationId: locationId ?? this.locationId,
+      locationName: locationName ?? this.locationName,
       price: price ?? this.price,
       cost: cost ?? this.cost,
       stock: stock ?? this.stock,
