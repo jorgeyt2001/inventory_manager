@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'https://afff-2-139-159-180.ngrok-free.app';
+  static const String baseUrl = 'https://confeccionesyaiza.com/api';
 
   static Map<String, String> get _headers => {
         'Content-Type': 'application/json',
