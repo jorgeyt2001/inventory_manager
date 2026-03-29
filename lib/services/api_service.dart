@@ -12,9 +12,20 @@ class ApiService {
   // ── Generic helpers ────────────────────────────────────────────────────────
 
   static Future<dynamic> _get(String path) async {
-    final res = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
+    final res = await http.get(Uri.parse('$baseUrl$path'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
     if (res.statusCode == 200) return jsonDecode(res.body);
     throw Exception('GET $path failed: ${res.statusCode}');
+  }
+
+  static Future<bool> checkConnection() async {
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/health'), headers: _headers)
+          .timeout(const Duration(seconds: 8));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<dynamic> _post(String path, Map<String, dynamic> body) async {

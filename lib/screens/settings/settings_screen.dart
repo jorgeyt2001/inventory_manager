@@ -31,12 +31,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _checkApiConnection() async {
     setState(() => _checkingConnection = true);
-    try {
-      await ApiService.getDashboardStats();
-      if (mounted) setState(() { _apiConnected = true; _checkingConnection = false; });
-    } catch (_) {
-      if (mounted) setState(() { _apiConnected = false; _checkingConnection = false; });
-    }
+    final connected = await ApiService.checkConnection();
+    if (mounted) setState(() { _apiConnected = connected; _checkingConnection = false; });
   }
 
   Future<void> _migrateLocalData() async {
