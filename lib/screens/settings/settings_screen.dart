@@ -3,6 +3,10 @@ import 'package:provider/provider.dart';
 import '../../database/database_service.dart';
 import '../../services/api_service.dart';
 import '../../providers/category_provider.dart';
+import '../../providers/product_provider.dart';
+import '../../providers/sale_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../services/export_service.dart';
 import 'categories_screen.dart';
 import 'locations_screen.dart';
 
@@ -46,7 +50,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      // 1. Load local products
       final localProducts = await DatabaseService.instance.getAllProducts();
       if (!mounted) return;
       setState(() => _migrationTotal = localProducts.length);
@@ -56,24 +59,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
 
-      // 2. Load existing API categories
       final categoryProvider = context.read<CategoryProvider>();
       await categoryProvider.loadCategories();
       final apiCategories = categoryProvider.categories;
 
-      // Map: name.lower -> id
       final categoryMap = <String, int>{
         for (final c in apiCategories) c.name.toLowerCase(): c.id,
       };
 
-      // 3. Migrate each product
       for (final product in localProducts) {
         if (!mounted) return;
 
         final categoryName = product.category.isEmpty ? 'General' : product.category;
         final categoryKey = categoryName.toLowerCase();
 
-        // Get or create category in API
         int? categoryId = categoryMap[categoryKey];
         if (categoryId == null) {
           try {
@@ -85,7 +84,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           }
         }
 
-        // Upload product
         try {
           await ApiService.createProduct({
             'name': product.name,
@@ -112,6 +110,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _exportProducts() async {
+    try {
+      final products = context.read<ProductProvider>().products;
+      if (products.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hay productos para exportar')),
+        );
+        return;
+      }
+      final path = await ExportService.exportProductsCSV(products);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Exportado: $path')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al exportar: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportSales() async {
+    try {
+      final sales = context.read<SaleProvider>().sales;
+      if (sales.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hay ventas para exportar')),
+        );
+        return;
+      }
+      final path = await ExportService.exportSalesCSV(sales);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Exportado: $path')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al exportar: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -124,6 +170,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSyncSection(),
           const SizedBox(height: 16),
           _buildDataSection(),
+          const SizedBox(height: 16),
+          _buildExportSection(),
         ],
       ),
     );
@@ -137,7 +185,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Conexión al servidor', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text('Conexión al servidor',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -177,7 +226,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Sincronización', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text('Sincronización',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(
               'Migra los productos almacenados en la base de datos local del dispositivo al servidor.',
@@ -234,6 +284,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       elevation: 1,
       child: Column(
         children: [
+          // Dark mode toggle
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, _) => SwitchListTile(
+              secondary: const Icon(Icons.dark_mode_outlined),
+              title: const Text('Modo oscuro'),
+              value: themeProvider.isDark,
+              onChanged: (_) => themeProvider.toggle(),
+            ),
+          ),
+          const Divider(height: 1, indent: 16),
           ListTile(
             leading: const Icon(Icons.label_outline),
             title: const Text('Categorías'),
@@ -252,6 +312,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
               context,
               MaterialPageRoute(builder: (_) => const LocationsScreen()),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExportSection() {
+    return Card(
+      elevation: 1,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text('Exportar datos',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.inventory_2_outlined),
+            title: const Text('Exportar productos CSV'),
+            trailing: const Icon(Icons.download_outlined),
+            onTap: _exportProducts,
+          ),
+          const Divider(height: 1, indent: 16),
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: const Text('Exportar ventas CSV'),
+            trailing: const Icon(Icons.download_outlined),
+            onTap: _exportSales,
           ),
         ],
       ),

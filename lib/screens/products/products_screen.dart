@@ -7,7 +7,10 @@ import '../../providers/product_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../utils/formatters.dart';
+import '../../utils/color_utils.dart';
+import 'product_detail_screen.dart';
 import 'product_form_screen.dart';
+import 'stock_adjustment_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -69,7 +72,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
               },
             ),
           ),
-          _buildFilterRow(),
+          _buildFilterRowFull(),
+          _buildActiveFilterChips(),
           Expanded(
             child: Consumer<ProductProvider>(
               builder: (context, provider, child) {
@@ -121,19 +125,19 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   Widget _buildFilterRow() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Row(
         children: [
           // Category filter
           Expanded(
             child: Consumer<CategoryProvider>(
               builder: (context, catProvider, _) {
-                final productProvider = context.read<ProductProvider>();
+                final productProvider = context.watch<ProductProvider>();
                 return DropdownButtonFormField<int>(
                   value: productProvider.filterCategoryId,
                   isDense: true,
                   decoration: const InputDecoration(
-                    labelText: 'Categoria',
+                    labelText: 'Categoría',
                     contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   ),
                   items: [
@@ -149,17 +153,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
               },
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           // Location filter
           Expanded(
             child: Consumer<LocationProvider>(
               builder: (context, locProvider, _) {
-                final productProvider = context.read<ProductProvider>();
+                final productProvider = context.watch<ProductProvider>();
                 return DropdownButtonFormField<int>(
                   value: productProvider.filterLocationId,
                   isDense: true,
                   decoration: const InputDecoration(
-                    labelText: 'Ubicacion',
+                    labelText: 'Ubicación',
                     contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   ),
                   items: [
@@ -175,13 +179,181 @@ class _ProductsScreenState extends State<ProductsScreen> {
               },
             ),
           ),
+          const SizedBox(width: 8),
+          // Sort button
+          Consumer<ProductProvider>(
+            builder: (context, provider, _) => IconButton(
+              icon: Icon(
+                Icons.sort,
+                color: provider.sortBy != 'name' ? Theme.of(context).colorScheme.primary : null,
+              ),
+              tooltip: 'Ordenar',
+              onPressed: () => _showSortSheet(context),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSecondFilterRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Row(
+        children: [
+          // Color filter
+          Expanded(
+            child: Consumer<ProductProvider>(
+              builder: (context, provider, _) => DropdownButtonFormField<String>(
+                value: provider.filterColor,
+                isDense: true,
+                decoration: const InputDecoration(
+                  labelText: 'Color',
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+                items: [
+                  const DropdownMenuItem<String>(value: null, child: Text('Todos')),
+                  ...Product.coloresSelene.map((c) => DropdownMenuItem(value: c, child: Text(c))),
+                ],
+                onChanged: (v) => context.read<ProductProvider>().setFilterColor(v),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Talla filter
+          Expanded(
+            child: Consumer<ProductProvider>(
+              builder: (context, provider, _) => DropdownButtonFormField<String>(
+                value: provider.filterTalla,
+                isDense: true,
+                decoration: const InputDecoration(
+                  labelText: 'Talla',
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+                items: [
+                  const DropdownMenuItem<String>(value: null, child: Text('Todas')),
+                  ...Product.tallasSelene.map((t) => DropdownMenuItem(value: t, child: Text(t))),
+                ],
+                onChanged: (v) => context.read<ProductProvider>().setFilterTalla(v),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Combined filter rows (first + second)
+  // We show both rows in a Column wrapped inside a Column
+  // But to keep the UI clean, put the color/talla filters in a second row below
+  Widget _buildFilterRowFull() {
+    return Column(
+      children: [
+        _buildFilterRow(),
+        _buildSecondFilterRow(),
+      ],
+    );
+  }
+
+  Widget _buildActiveFilterChips() {
+    return Consumer<ProductProvider>(
+      builder: (context, provider, _) {
+        final chips = <Widget>[];
+
+        if (provider.filterColor != null) {
+          chips.add(_buildFilterChip(
+            'Color: ${provider.filterColor}',
+            () => provider.setFilterColor(null),
+          ));
+        }
+        if (provider.filterTalla != null) {
+          chips.add(_buildFilterChip(
+            'Talla: ${provider.filterTalla}',
+            () => provider.setFilterTalla(null),
+          ));
+        }
+        if (provider.sortBy != 'name') {
+          chips.add(_buildFilterChip(
+            'Orden: ${_sortLabel(provider.sortBy)}',
+            () => provider.setSortBy('name'),
+          ));
+        }
+
+        if (chips.isEmpty) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: chips),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterChip(String label, VoidCallback onRemove) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Chip(
+        label: Text(label, style: const TextStyle(fontSize: 12)),
+        deleteIcon: const Icon(Icons.close, size: 16),
+        onDeleted: onRemove,
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+
+  String _sortLabel(String sort) {
+    switch (sort) {
+      case 'price_asc': return 'Precio ↑';
+      case 'price_desc': return 'Precio ↓';
+      case 'stock_asc': return 'Stock ↑';
+      case 'stock_desc': return 'Stock ↓';
+      default: return 'Nombre';
+    }
+  }
+
+  void _showSortSheet(BuildContext context) {
+    final provider = context.read<ProductProvider>();
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Ordenar por', style: Theme.of(context).textTheme.titleMedium),
+            ),
+            ...[
+              ('name', 'Nombre A-Z', Icons.sort_by_alpha),
+              ('price_asc', 'Precio (menor primero)', Icons.arrow_upward),
+              ('price_desc', 'Precio (mayor primero)', Icons.arrow_downward),
+              ('stock_asc', 'Stock (menor primero)', Icons.arrow_upward),
+              ('stock_desc', 'Stock (mayor primero)', Icons.arrow_downward),
+            ].map((entry) => ListTile(
+              leading: Icon(entry.$3),
+              title: Text(entry.$2),
+              selected: provider.sortBy == entry.$1,
+              selectedColor: Theme.of(context).colorScheme.primary,
+              onTap: () {
+                provider.setSortBy(entry.$1);
+                Navigator.pop(ctx);
+              },
+            )),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildProductCard(Product product) {
     final isLowStock = product.stock <= product.minStock;
+    final hasMargin = product.cost > 0 && product.price > 0;
+    final margin = hasMargin ? ((product.price - product.cost) / product.price * 100) : 0.0;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -242,9 +414,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.purple[200]!),
                         ),
-                        child: Text(
-                          product.color!,
-                          style: TextStyle(fontSize: 11, color: Colors.purple[700]),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ColorUtils.colorDot(product.color, size: 10),
+                            Text(
+                              product.color!,
+                              style: TextStyle(fontSize: 11, color: Colors.purple[700]),
+                            ),
+                          ],
                         ),
                       ),
                     if (product.talla != null)
@@ -269,7 +447,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   AppFormatters.currency(product.price),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
@@ -284,6 +462,32 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     ),
                   ),
                 ),
+                if (hasMargin) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: margin >= 40
+                          ? Colors.green[100]
+                          : margin >= 20
+                              ? Colors.amber[100]
+                              : Colors.red[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${margin.toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: margin >= 40
+                            ? Colors.green[800]
+                            : margin >= 20
+                                ? Colors.amber[800]
+                                : Colors.red[800],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
@@ -301,6 +505,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
             ),
             const PopupMenuItem(
+              value: 'stock',
+              child: Row(
+                children: [
+                  Icon(Icons.tune),
+                  SizedBox(width: 8),
+                  Text('Ajustar stock'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
               value: 'delete',
               child: Row(
                 children: [
@@ -314,12 +528,22 @@ class _ProductsScreenState extends State<ProductsScreen> {
           onSelected: (value) {
             if (value == 'edit') {
               _navigateToForm(context, product: product);
+            } else if (value == 'stock') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StockAdjustmentScreen(product: product),
+                ),
+              );
             } else if (value == 'delete') {
               _confirmDelete(context, product);
             }
           },
         ),
-        onTap: () => _navigateToForm(context, product: product),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+        ),
       ),
     );
   }
@@ -338,7 +562,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Producto'),
-        content: Text('Estas seguro de eliminar "${product.name}"?'),
+        content: Text('¿Estás seguro de eliminar "${product.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -358,4 +582,5 @@ class _ProductsScreenState extends State<ProductsScreen> {
       ),
     );
   }
+
 }

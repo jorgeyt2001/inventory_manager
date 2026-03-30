@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../models/reservation.dart';
+import '../../providers/product_provider.dart';
 import '../../providers/reservation_provider.dart';
+import '../../providers/sale_provider.dart';
 import '../../utils/formatters.dart';
+import '../sales/sales_screen.dart';
 
 class ReservationsScreen extends StatefulWidget {
   const ReservationsScreen({super.key});
@@ -127,42 +130,46 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
           ],
         ),
         trailing: reservation.status == 'pendiente'
-            ? PopupMenuButton(
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
+            ? PopupMenuButton<String>(
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'convert',
+                    child: Row(children: [
+                      Icon(Icons.shopping_cart, color: Colors.green),
+                      SizedBox(width: 8),
+                      Text('Convertir a venta'),
+                    ]),
+                  ),
+                  PopupMenuItem(
                     value: 'completada',
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.green),
-                        SizedBox(width: 8),
-                        Text('Completar'),
-                      ],
-                    ),
+                    child: Row(children: [
+                      Icon(Icons.check_circle, color: Colors.green),
+                      SizedBox(width: 8),
+                      Text('Completar'),
+                    ]),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'cancelada',
-                    child: Row(
-                      children: [
-                        Icon(Icons.cancel, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Cancelar'),
-                      ],
-                    ),
+                    child: Row(children: [
+                      Icon(Icons.cancel, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Cancelar'),
+                    ]),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text('Eliminar'),
-                      ],
-                    ),
+                    child: Row(children: [
+                      Icon(Icons.delete, color: Colors.grey),
+                      SizedBox(width: 8),
+                      Text('Eliminar'),
+                    ]),
                   ),
                 ],
                 onSelected: (value) {
                   if (value == 'delete') {
                     context.read<ReservationProvider>().deleteReservation(reservation.id);
+                  } else if (value == 'convert') {
+                    _convertToSale(reservation);
                   } else {
                     context.read<ReservationProvider>().updateStatus(reservation.id, value);
                   }
@@ -177,13 +184,157 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                 child: Text(
                   reservation.status.substring(0, 1).toUpperCase() +
                       reservation.status.substring(1),
-                  style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: 12, color: statusColor, fontWeight: FontWeight.bold),
                 ),
               ),
         isThreeLine: true,
       ),
     );
   }
+
+  // ── Convertir a venta ────────────────────────────────────────────────────────
+
+  void _convertToSale(Reservation reservation) {
+    final productProvider = context.read<ProductProvider>();
+
+    // Find products matching name, color, talla with available stock
+    final matches = productProvider.allProducts.where((p) {
+      final nameMatch = p.name
+          .toLowerCase()
+          .contains(reservation.productName.toLowerCase());
+      final colorMatch =
+          reservation.color == null || p.color == reservation.color;
+      final tallaMatch =
+          reservation.talla == null || p.talla == reservation.talla;
+      return nameMatch && colorMatch && tallaMatch && p.stock > 0;
+    }).toList();
+
+    if (matches.isEmpty) {
+      // Try without color/talla filter
+      final nameOnly = productProvider.allProducts
+          .where((p) => p.name
+              .toLowerCase()
+              .contains(reservation.productName.toLowerCase()))
+          .toList();
+
+      if (nameOnly.isEmpty) {
+        _showNoProductDialog(reservation);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '"${reservation.productName}" encontrado pero sin stock disponible'),
+          backgroundColor: Colors.orange,
+        ));
+      }
+      return;
+    }
+
+    if (matches.length == 1) {
+      _doConvert(matches.first, reservation);
+    } else {
+      _showProductSelector(matches, reservation);
+    }
+  }
+
+  void _showNoProductDialog(Reservation reservation) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Producto no encontrado'),
+        content: Text(
+            '"${reservation.productName}" no está en el inventario.\n¿Crear venta manual?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SalesScreen()),
+              );
+            },
+            child: const Text('Venta manual'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showProductSelector(
+      List<Product> matches, Reservation reservation) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Seleccionar producto'),
+        content: SizedBox(
+          width: 320,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: matches.length,
+            itemBuilder: (_, index) {
+              final p = matches[index];
+              return ListTile(
+                title: Text(p.name),
+                subtitle: Text(
+                    [p.color, p.talla != null ? 'T.${p.talla}' : null]
+                        .where((e) => e != null)
+                        .join(' — ')
+                        .let((s) => '$s  Stock: ${p.stock}')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _doConvert(p, reservation);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _doConvert(Product product, Reservation reservation) {
+    final saleProvider = context.read<SaleProvider>();
+
+    // Add to cart (quantity times)
+    for (var i = 0; i < reservation.quantity; i++) {
+      saleProvider.addToCart(product);
+    }
+    // Pre-fill customer name
+    if (reservation.customerName.isNotEmpty) {
+      saleProvider.setCustomerName(reservation.customerName);
+    }
+
+    // Navigate to SalesScreen; mark reservation completada only on success
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SalesScreen(
+          onSaleCompleted: () {
+            context
+                .read<ReservationProvider>()
+                .updateStatus(reservation.id, 'completada');
+          },
+        ),
+      ),
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${product.name} × ${reservation.quantity} añadido al carrito'),
+      backgroundColor: Colors.green,
+    ));
+  }
+
+  // ── Create reservation dialog ────────────────────────────────────────────────
 
   void _showCreateReservation(BuildContext context) {
     final nameController = TextEditingController();
@@ -222,7 +373,8 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                           isDense: true,
                         ),
                         items: [
-                          const DropdownMenuItem<String>(value: null, child: Text('--')),
+                          const DropdownMenuItem<String>(
+                              value: null, child: Text('--')),
                           ...Product.coloresSelene.map((c) =>
                               DropdownMenuItem(value: c, child: Text(c))),
                         ],
@@ -239,7 +391,8 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                           isDense: true,
                         ),
                         items: [
-                          const DropdownMenuItem<String>(value: null, child: Text('--')),
+                          const DropdownMenuItem<String>(
+                              value: null, child: Text('--')),
                           ...Product.tallasSelene.map((t) =>
                               DropdownMenuItem(value: t, child: Text(t))),
                         ],
@@ -293,23 +446,29 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                if (nameController.text.isEmpty || customerController.text.isEmpty) {
+                if (nameController.text.isEmpty ||
+                    customerController.text.isEmpty) {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('Producto y cliente son requeridos')),
+                    const SnackBar(
+                        content:
+                            Text('Producto y cliente son requeridos')),
                   );
                   return;
                 }
-
                 context.read<ReservationProvider>().addReservation(
-                  productName: nameController.text,
-                  color: selectedColor,
-                  talla: selectedTalla,
-                  quantity: int.tryParse(quantityController.text) ?? 1,
-                  customerName: customerController.text,
-                  customerPhone: phoneController.text.isEmpty ? null : phoneController.text,
-                  notes: notesController.text.isEmpty ? null : notesController.text,
-                );
-
+                      productName: nameController.text,
+                      color: selectedColor,
+                      talla: selectedTalla,
+                      quantity:
+                          int.tryParse(quantityController.text) ?? 1,
+                      customerName: customerController.text,
+                      customerPhone: phoneController.text.isEmpty
+                          ? null
+                          : phoneController.text,
+                      notes: notesController.text.isEmpty
+                          ? null
+                          : notesController.text,
+                    );
                 Navigator.pop(dialogContext);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Reserva creada')),
@@ -322,4 +481,10 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       ),
     );
   }
+}
+
+// ── String extension helper ───────────────────────────────────────────────────
+
+extension _StringLet<T> on T {
+  R let<R>(R Function(T) fn) => fn(this);
 }

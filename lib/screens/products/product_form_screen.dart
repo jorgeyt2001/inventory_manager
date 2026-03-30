@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -10,6 +11,7 @@ import '../../providers/category_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/barcode_server_service.dart';
+import '../sales/barcode_scanner_screen.dart';
 
 class ProductFormScreen extends StatefulWidget {
   final Product? product;
@@ -133,41 +135,56 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
-  // ── Web companion scanner ────────────────────────────────────────────────────
+  // ── Scanner (nativo en móvil, web companion en desktop) ─────────────────────
+
+  bool get _isMobile =>
+      !const bool.fromEnvironment('dart.library.html') &&
+      (Platform.isIOS || Platform.isAndroid);
 
   void _scanBarcode() async {
-    final service = BarcodeServerService.instance;
-    final url = service.serverUrl;
+    String? scannedBarcode;
 
-    if (url == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Servidor no disponible. Verifica la conexion WiFi.'),
-          backgroundColor: Colors.red,
+    if (_isMobile) {
+      // iOS / Android → cámara nativa
+      scannedBarcode = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+      );
+    } else {
+      // Desktop → servidor web + QR
+      final service = BarcodeServerService.instance;
+      final url = service.serverUrl;
+
+      if (url == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Servidor no disponible. Verifica la conexión WiFi.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) => _WebScannerDialog(
+          url: url,
+          onBarcodeReceived: (barcode) {
+            scannedBarcode = barcode;
+            Navigator.of(dialogContext).pop();
+          },
         ),
       );
-      return;
     }
 
-    String? receivedBarcode;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) => _WebScannerDialog(
-        url: url,
-        onBarcodeReceived: (barcode) {
-          receivedBarcode = barcode;
-          Navigator.of(dialogContext).pop();
-        },
-      ),
-    );
-
-    if (receivedBarcode != null && mounted) {
+    if (scannedBarcode != null && scannedBarcode!.isNotEmpty && mounted) {
       _barcodeController.removeListener(_onBarcodeChanged);
-      setState(() => _barcodeController.text = receivedBarcode!);
+      setState(() => _barcodeController.text = scannedBarcode!);
       _barcodeController.addListener(_onBarcodeChanged);
-      _autoFillFromBarcode(receivedBarcode!);
+      _autoFillFromBarcode(scannedBarcode!);
     }
   }
 
@@ -255,6 +272,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       prefixIcon: Icon(Icons.attach_money),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setState(() {}),
                     validator: (value) {
                       if (value == null || value.isEmpty) return 'Requerido';
                       if (double.tryParse(value) == null) return 'Numero invalido';
@@ -271,10 +289,36 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       prefixIcon: Icon(Icons.money_off),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
               ],
             ),
+            Builder(builder: (context) {
+              final price = double.tryParse(_priceController.text) ?? 0;
+              final cost = double.tryParse(_costController.text) ?? 0;
+              if (price <= 0 || cost <= 0) return const SizedBox.shrink();
+              final margin = (price - cost) / price * 100;
+              final color = margin >= 40 ? Colors.green : margin >= 20 ? Colors.amber[700]! : Colors.red;
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.trending_up, size: 16, color: color),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Margen: ${margin.toStringAsFixed(1)}%',
+                      style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '(beneficio ${(price - cost).toStringAsFixed(2)} € por unidad)',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: 16),
             Row(
               children: [

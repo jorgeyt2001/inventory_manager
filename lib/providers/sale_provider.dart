@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 import '../models/sale.dart';
 import '../database/database_service.dart';
+import '../services/api_service.dart';
 
 class CartItem {
   final Product product;
@@ -20,12 +21,15 @@ class SaleProvider with ChangeNotifier {
   double _discount = 0;
   String _paymentMethod = 'Efectivo';
   String? _customerName;
+  String? _notes;
 
   List<Sale> get sales => _sales;
   List<CartItem> get cart => _cart;
   bool get isLoading => _isLoading;
   double get discount => _discount;
   String get paymentMethod => _paymentMethod;
+  String? get customerName => _customerName;
+  String? get notes => _notes;
 
   double get subtotal => _cart.fold(0, (sum, item) => sum + item.total);
   double get tax => subtotal * 0.0;
@@ -47,7 +51,7 @@ class SaleProvider with ChangeNotifier {
 
   void addToCart(Product product) {
     final existingIndex = _cart.indexWhere((item) => item.product.id == product.id);
-    
+
     if (existingIndex >= 0) {
       if (_cart[existingIndex].quantity < product.stock) {
         _cart[existingIndex].quantity++;
@@ -88,7 +92,12 @@ class SaleProvider with ChangeNotifier {
   }
 
   void setCustomerName(String? name) {
-    _customerName = name;
+    _customerName = (name == null || name.isEmpty) ? null : name;
+    notifyListeners();
+  }
+
+  void setNotes(String? value) {
+    _notes = (value == null || value.isEmpty) ? null : value;
     notifyListeners();
   }
 
@@ -96,15 +105,19 @@ class SaleProvider with ChangeNotifier {
     _cart.clear();
     _discount = 0;
     _customerName = null;
+    _notes = null;
     notifyListeners();
   }
 
   Future<Sale?> completeSale() async {
     if (_cart.isEmpty) return null;
 
+    // Snapshot cart before clearing
+    final cartSnapshot = List<CartItem>.from(_cart);
+
     final sale = Sale(
       id: const Uuid().v4(),
-      items: _cart.map((item) => SaleItem(
+      items: cartSnapshot.map((item) => SaleItem(
         productId: item.product.id,
         productName: item.product.name,
         quantity: item.quantity,
@@ -117,18 +130,46 @@ class SaleProvider with ChangeNotifier {
       total: total,
       paymentMethod: _paymentMethod,
       customerName: _customerName,
+      notes: _notes,
       createdAt: DateTime.now(),
     );
 
+    // Save to local SQLite
     await DatabaseService.instance.insertSale(sale);
+
+    // Update stock on API for each item
+    for (final item in cartSnapshot) {
+      try {
+        final newStock = (item.product.stock - item.quantity).clamp(0, 999999);
+        await ApiService.updateProduct(int.parse(item.product.id), {
+          ...item.product.toJson(),
+          'stock': newStock,
+        });
+      } catch (e) {
+        debugPrint('Error updating stock for ${item.product.name}: $e');
+      }
+
+      // Register each sale item in the API
+      try {
+        await ApiService.createSale(
+          productId: int.parse(item.product.id),
+          quantity: item.quantity,
+          price: item.product.price,
+          total: item.total,
+        );
+      } catch (e) {
+        debugPrint('Error registering sale item in API: $e');
+      }
+    }
+
     clearCart();
     await loadSales();
-    
+
     return sale;
   }
 
   List<Sale> getSalesByDateRange(DateTime start, DateTime end) {
-    return _sales.where((sale) => 
+    return _sales.where((sale) =>
       sale.createdAt.isAfter(start) && sale.createdAt.isBefore(end)
     ).toList();
   }

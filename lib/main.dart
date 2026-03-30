@@ -8,6 +8,7 @@ import 'providers/return_provider.dart';
 import 'providers/reservation_provider.dart';
 import 'providers/category_provider.dart';
 import 'providers/location_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'utils/theme.dart';
 import 'services/barcode_server_service.dart';
@@ -34,6 +35,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => CategoryProvider()),
         ChangeNotifierProvider(create: (_) => LocationProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
@@ -41,11 +43,17 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ReturnProvider()),
         ChangeNotifierProvider(create: (_) => ReservationProvider()),
       ],
-      child: MaterialApp(
-        title: 'Inventory Manager',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        home: const DashboardScreen(),
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp(
+            title: 'Inventory Manager',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: themeProvider.themeMode,
+            home: const DashboardScreen(),
+          );
+        },
       ),
     );
   }
